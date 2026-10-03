@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+langgraph
+langchain
+python-dotenv
+pydantic
+qdrant-client
+langchain-groq
+langchain-ollama
+langchain-text-splitter
+fastembed
+ollama
+sentence_transformers
