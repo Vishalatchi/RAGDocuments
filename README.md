@@ -2,13 +2,20 @@
 
 ## 1. Project Overview
 
-This repository contains Python code for loading Markdown documents, splitting them into chunks, embedding those chunks, and storing them in Qdrant. It also contains code for hybrid retrieval, cross-encoder reranking, and answer generation with Groq.
+This repository contains a FastAPI application titled `RAG system` and Python code that loads Markdown files, splits them into chunks, embeds those chunks, and stores them in Qdrant. It also contains hybrid retrieval, cross-encoder reranking, and answer generation with Groq.
 
-There is no implemented application entry point. `api/main.py`, `api/routes/query.py`, `scripts/run_injestion.py`, and `scripts/run_query.py` are empty.
+`api/main.py` creates the FastAPI app and includes two routers. `scripts/run_ingestion.py` and `scripts/run_query.py` are empty.
 
 `tests/test_chunking.py` loads Markdown files, prints the chunks, and calls `pipeline.chunk_embedding`. `tests/test_retrieval.py` calls `answer.generate_answer` and prints the response content. `generate_answer` calls `hybrid_search`.
 
 ## 2. Project Architecture / high level flow
+
+**HTTP application**
+
+- `api/main.py` creates `FastAPI(title="RAG system")`.
+- It includes `RAGAnswerAPIRouter` from `api/routes/rag_answer.py`.
+- It includes `ingestion_router` from `api/routes/ingestion.py`.
+- `GET /` returns `{"message":"app is running"}`.
 
 **Document loading and chunking**
 
@@ -23,7 +30,10 @@ There is no implemented application entry point. `api/main.py`, `api/routes/quer
 
 - `src/rag_app/ingestion/pipeline.py` defines `create_collection`, `generate_point_id`, `chunk_embedding`, `delete_document`, and `create_payload_index`.
 - `chunk_embedding` builds a `PointStruct` for each chunk, appends it to a batch, and calls `QdrantClient.upsert` when the batch reaches `batch_size` and again for any remaining points.
-- `tests/test_chunking.py` calls `fileloader.load_files` and then `pipeline.chunk_embedding`. The calls to `pipeline.create_collection` and `pipeline.create_payload_index` in that file are comments.
+- `POST /ingestion/create_collection` calls `pipeline.create_collection` and then `pipeline.create_payload_index`, both with `os.getenv("QDRANT_COLLECTION_NAME")`.
+- `POST /ingestion/load_files` calls `fileloader.load_files(filepath)` and then `pipeline.chunk_embedding(data)`.
+- `POST /ingestion/delete_files` calls `pipeline.delete_document` with `QDRANT_COLLECTION_NAME` and `filepath`.
+- `tests/test_chunking.py` also calls `fileloader.load_files` and `pipeline.chunk_embedding`. The calls to `pipeline.create_collection` and `pipeline.create_payload_index` in that file are comments.
 
 **Query and answer**
 
@@ -31,11 +41,12 @@ There is no implemented application entry point. `api/main.py`, `api/routes/quer
 - It builds a dense query vector and a sparse query vector, queries Qdrant using `QDRANT_COLLECTION_NAME`, then calls `reranker`.
 - `src/rag_app/generation/answer.py` defines `filter_context_relative_response` and `generate_answer(query)`.
 - `generate_answer` calls `hybrid_search(query)`, filters the reranked results, and sends a prompt to `ChatGroq`.
+- `POST /ragapi/generate_answer` calls `answer.generate_answer(query)` and returns `{"answer": response}`.
 - `tests/test_retrieval.py` calls `answer.generate_answer` at module level. It also defines `scrolldata`, and the module-level code does not call `scrolldata`.
 
 ## 3. Technologies and dependencies
 
-`requirement.txt` lists these names, with no versions:
+`requirements.txt` lists these names, with no versions:
 
 - fastapi
 - uvicorn
@@ -55,6 +66,9 @@ Imports present in project source:
 
 | Module | Imports used |
 | --- | --- |
+| `api/main.py` | `fastapi.FastAPI`, `api.routes.rag_answer.RAGAnswerAPIRouter`, `api.routes.ingestion.ingestion_router` |
+| `api/routes/ingestion.py` | `fastapi.APIRouter`, `src.rag_app.ingestion.pipeline`, `src.rag_app.ingestion.fileloader`, `dotenv.load_dotenv` |
+| `api/routes/rag_answer.py` | `fastapi.FastAPI`, `fastapi.APIRouter`, `src.rag_app.generation.answer` |
 | `src/rag_app/ingestion/chunking.py` | `langchain_text_splitters.RecursiveCharacterTextSplitter`, `langchain_text_splitters.MarkdownHeaderTextSplitter` |
 | `src/rag_app/ingestion/fileloader.py` | `langchain_core.documents.Document`, `src.rag_app.ingestion.chunking.chunk_maker` |
 | `src/rag_app/ingestion/pipeline.py` | `ollama`, `langchain_ollama.OllamaEmbeddings`, `fastembed.SparseTextEmbedding`, `qdrant_client.QdrantClient`, `qdrant_client.models`, `dotenv.load_dotenv`, `collections.Counter` |
@@ -64,9 +78,11 @@ Imports present in project source:
 | `tests/test_chunking.py` | `src.rag_app.ingestion.fileloader`, `src.rag_app.ingestion.pipeline`, `dotenv.load_dotenv` |
 | `tests/test_retrieval.py` | `src.rag_app.generation.answer`, `qdrant_client.QdrantClient`, `qdrant_client.models`, `json`, `dotenv.load_dotenv` |
 
+`fastapi.FastAPI` is imported in `api/routes/rag_answer.py` and is not used in that file.
+
 `collections.Counter` is imported in `pipeline.py` and is not used.
 
-`fastapi`, `uvicorn`, `langgraph`, `langchain`, and `pydantic` appear in `requirement.txt` and are not imported by the Python files in this repository.
+`uvicorn`, `langgraph`, `langchain`, and `pydantic` appear in `requirements.txt` and are not imported by the Python files in this repository.
 
 There is no `pyproject.toml`.
 
@@ -77,15 +93,16 @@ RAGofDocuments/
 ├── .env
 ├── .gitignore
 ├── README.md
-├── requirement.txt
+├── requirements.txt
 ├── api/
 │   ├── __init__.py
 │   ├── main.py
 │   └── routes/
 │       ├── __init__.py
-│       └── query.py
+│       ├── ingestion.py
+│       └── rag_answer.py
 ├── scripts/
-│   ├── run_injestion.py
+│   ├── run_ingestion.py
 │   └── run_query.py
 ├── src/
 │   ├── rag_app/
@@ -112,7 +129,7 @@ RAGofDocuments/
 │   │       ├── client.py
 │   │       └── schema.py
 │   └── utils/
-│       ├── _init__.py
+│       ├── __init__.py
 │       └── logging.py
 └── tests/
     ├── __init__.py
@@ -124,10 +141,8 @@ RAGofDocuments/
 Empty files:
 
 - `api/__init__.py`
-- `api/main.py`
 - `api/routes/__init__.py`
-- `api/routes/query.py`
-- `scripts/run_injestion.py`
+- `scripts/run_ingestion.py`
 - `scripts/run_query.py`
 - `src/rag_app/__init__.py`
 - `src/rag_app/config.py`
@@ -140,12 +155,10 @@ Empty files:
 - `src/rag_app/vectorstore/__init__.py`
 - `src/rag_app/vectorstore/client.py`
 - `src/rag_app/vectorstore/schema.py`
-- `src/utils/_init__.py`
+- `src/utils/__init__.py`
 - `src/utils/logging.py`
 - `tests/__init__.py`
 - `tests/test_generation.py`
-
-`src/utils/_init__.py` is not named `__init__.py`.
 
 ## 5. Prerequisites
 
@@ -173,10 +186,10 @@ Names read by `os.getenv` in source:
 | --- | --- |
 | `QDRANT_API_KEY` | `src/rag_app/ingestion/pipeline.py`, `src/rag_app/retrieval/hybrid_search.py`, `tests/test_retrieval.py` |
 | `QDRANT_CLUSTER_ENDPOINT` | `src/rag_app/ingestion/pipeline.py`, `src/rag_app/retrieval/hybrid_search.py`, `tests/test_retrieval.py` |
-| `QDRANT_COLLECTION_NAME` | `src/rag_app/ingestion/pipeline.py` (`chunk_embedding` upsert calls), `src/rag_app/retrieval/hybrid_search.py` (`query_points`), `tests/test_retrieval.py` (`scroll`) |
+| `QDRANT_COLLECTION_NAME` | `src/rag_app/ingestion/pipeline.py` (`chunk_embedding` upsert calls), `api/routes/ingestion.py`, `src/rag_app/retrieval/hybrid_search.py` (`query_points`), `tests/test_retrieval.py` (`scroll`) |
 | `MODEL` | `src/rag_app/generation/answer.py` |
 
-`load_dotenv()` is called in `pipeline.py`, `hybrid_search.py`, `answer.py`, `tests/test_chunking.py`, and `tests/test_retrieval.py`.
+`load_dotenv()` is called in `pipeline.py`, `hybrid_search.py`, `answer.py`, `api/routes/ingestion.py`, `tests/test_chunking.py`, and `tests/test_retrieval.py`.
 
 Keys present in `.env` (names only):
 
@@ -196,7 +209,7 @@ Values are not listed here.
 
 Not currently documented.
 
-`api/main.py` is empty. `scripts/run_injestion.py` and `scripts/run_query.py` are empty. No Python file defines `if __name__ == "__main__"`.
+`api/main.py` defines the FastAPI application object `app`. It does not call a server. `scripts/run_ingestion.py` and `scripts/run_query.py` are empty. No Python file defines `if __name__ == "__main__"`. No host or port is set in the project source.
 
 `tests/test_chunking.py` is a top-level script. On execution it:
 
@@ -246,6 +259,8 @@ Not currently documented.
 3. Named sparse vector `sparse`: modifier `IDF`.
 4. After creation, print `collection created`.
 
+The HTTP handler `POST /ingestion/create_collection` calls this function and then `create_payload_index`.
+
 **Point identity** (`generate_point_id`)
 
 - ID string is `uuid.uuid5(uuid.NAMESPACE_URL, f"{source}:{chunk_index}")`.
@@ -265,9 +280,12 @@ Not currently documented.
 11. Upsert uses `collection_name=os.getenv("QDRANT_COLLECTION_NAME")` and `wait=True`.
 12. The function returns `points`. A batch that triggered `points.clear()` is not included in that return value. The final remainder, if any, is returned after it has been upserted.
 
+`POST /ingestion/load_files` calls `chunk_embedding` and does not use its return value.
+
 **Deletion** (`delete_document`)
 
 - Deletes points in the given collection whose payload field `source` matches the given `source`, with `wait=True`.
+- `POST /ingestion/delete_files` passes its `filepath` argument as that `source`.
 
 **Payload index** (`create_payload_index`)
 
@@ -308,15 +326,33 @@ Not currently documented.
 
 ## 9. API endpoints, if present
 
-Not currently documented.
+`api/main.py` sets the application title to `RAG system`. No request model is defined in the project. No authentication dependency is attached to the routes.
 
-`api/main.py` and `api/routes/query.py` are empty. No route, router, or HTTP handler is defined in the repository.
+| Method | Path | Function | Declared parameters | Return value in source |
+| --- | --- | --- | --- | --- |
+| `GET` | `/` | `root` | none | `{"message":"app is running"}` |
+| `POST` | `/ingestion/create_collection` | `create_collection` | none | `{"message": "Data ingestion successful"}` |
+| `POST` | `/ingestion/load_files` | `load_files` | `filepath: str` | `{"message": "Data ingestion successful"}` |
+| `POST` | `/ingestion/delete_files` | `delete_files` | `filepath: str` | `{"message": "Data deletion successful"}` |
+| `POST` | `/ragapi/generate_answer` | `generate_answer` | `query: str` | `{"answer": response}` |
+
+`ingestion_router` uses `prefix="/ingestion"` and `tags=["ingestion"]`.
+
+`RAGAnswerAPIRouter` uses `prefix="/ragapi"` and `tags=["RAG Answer API"]`. The `generate_answer` route function is `async`.
+
+`POST /ingestion/create_collection` calls `pipeline.create_collection` and `pipeline.create_payload_index` with `os.getenv("QDRANT_COLLECTION_NAME")`, then returns the message above.
+
+`POST /ingestion/load_files` calls `fileloader.load_files(filepath)` and `pipeline.chunk_embedding(data)`, then returns the message above.
+
+`POST /ingestion/delete_files` calls `pipeline.delete_document(os.getenv("QDRANT_COLLECTION_NAME"), filepath)`, then returns the message above.
+
+`POST /ragapi/generate_answer` sets `response` to the return value of `answer.generate_answer(query)`. That return value is the object returned by `ChatGroq.invoke`. The route returns `{"answer": response}`.
 
 ## 10. Installation steps
 
 Not currently documented.
 
-Dependencies are listed, without versions or an install command, in `requirement.txt`.
+Dependencies are listed, without versions or an install command, in `requirements.txt`.
 
 ## 11. Qdrant configuration and collection details, if present
 
@@ -334,7 +370,7 @@ Client construction in `pipeline.py`, `hybrid_search.py`, and `scrolldata`:
 | Sparse vector name | `sparse` |
 | Sparse modifier | `IDF` |
 
-The collection name used by `chunk_embedding` upsert and by `hybrid_search` `query_points` is `os.getenv("QDRANT_COLLECTION_NAME")`.
+The collection name used by `chunk_embedding` upsert, `hybrid_search` `query_points`, and the ingestion routes is `os.getenv("QDRANT_COLLECTION_NAME")`.
 
 `tests/test_retrieval.py` `scrolldata` also uses `os.getenv("QDRANT_COLLECTION_NAME")`.
 
@@ -380,17 +416,41 @@ Query fusion in `hybrid_search`: reciprocal rank fusion with `k=60`, prefetch li
 
 ## 13. Example request/response, based only on the actual API
 
-Not currently documented.
+No sample HTTP request or captured HTTP response is stored in the repository. The route functions return these values:
 
-No HTTP API is implemented. The repository does not contain a sample request body or a sample response body.
+`GET /`:
 
-`tests/test_retrieval.py` uses this query string:
+```json
+{"message": "app is running"}
+```
+
+`POST /ingestion/create_collection` and `POST /ingestion/load_files`:
+
+```json
+{"message": "Data ingestion successful"}
+```
+
+`POST /ingestion/delete_files`:
+
+```json
+{"message": "Data deletion successful"}
+```
+
+`POST /ragapi/generate_answer` returns:
+
+```json
+{"answer": "<return value of answer.generate_answer>"}
+```
+
+The project does not contain a stored value for that answer. `answer.generate_answer` returns the object from `ChatGroq.invoke`.
+
+`tests/test_retrieval.py` uses this query string with `answer.generate_answer` directly, not through the HTTP route:
 
 ```text
 how do I buy android phone
 ```
 
-It passes that string to `answer.generate_answer`. No captured response is stored in the repository.
+No captured response for that call is stored in the repository.
 
 ## 14. Testing instructions, if tests exist
 
@@ -413,30 +473,34 @@ No test runner, assertion, or test command is defined in the repository.
 - Qdrant access uses `QDRANT_API_KEY` and `QDRANT_CLUSTER_ENDPOINT` from the environment after `load_dotenv()`.
 - `MODEL` is read from the environment for `ChatGroq`.
 - `GROQ_API_KEY` is stored in `.env`. Project source does not reference that name.
-- No authentication, authorization, or request validation code is present. No API is implemented.
+- The FastAPI routes do not declare authentication or authorization.
+- `POST /ingestion/load_files` passes `filepath` to `fileloader.load_files`, which reads a file or walks a directory.
+- `POST /ingestion/delete_files` passes `filepath` to `pipeline.delete_document` as the `source` filter value.
 - `tests/test_chunking.py` contains an absolute local directory path.
 - `tests/test_retrieval.py` contains an absolute local file path inside `scrolldata` and prints the generated answer content.
 - `chunk_embedding` prints each generated point id.
 
 ## 16. Known limitations
 
-- `api/main.py`, `api/routes/query.py`, both scripts, `config.py`, `embedding/dense.py`, `embedding/sparse.py`, `vectorstore/client.py`, `vectorstore/schema.py`, and `utils/logging.py` are empty.
-- `src/utils/_init__.py` is not a package `__init__.py`.
-- `requirement.txt` has no versions. Several listed packages are not imported.
-- No `.env.example`, install command, or run command is in the repository.
+- `scripts/run_ingestion.py`, `scripts/run_query.py`, `config.py`, `embedding/dense.py`, `embedding/sparse.py`, `vectorstore/client.py`, `vectorstore/schema.py`, and `utils/logging.py` are empty.
+- `requirements.txt` has no versions. `uvicorn`, `langgraph`, `langchain`, and `pydantic` are listed and are not imported.
+- No `.env.example`, install command, or server start command is in the repository. `api/main.py` does not set a host or port.
 - `.env` key names include a trailing space. `os.getenv` calls use names without that trailing space.
 - `create_collection`, `delete_document`, and `create_payload_index` take a `collection_name` argument. `chunk_embedding` and `hybrid_search` use `QDRANT_COLLECTION_NAME` instead of a function argument.
 - `hybrid_search` docstring lists `collection_name`. The function signature does not.
 - `generate_answer` docstring lists `reranked_result`. The function signature is `generate_answer(query)`.
-- `chunk_embedding` returns the points still held in `points` after upsert. Batches cleared at `batch_size` are not part of that return value.
+- `chunk_embedding` returns the points still held in `points` after upsert. Batches cleared at `batch_size` are not part of that return value. The load-files route does not use that return value.
 - `collections.Counter` is imported in `pipeline.py` and is not used.
+- `fastapi.FastAPI` is imported in `api/routes/rag_answer.py` and is not used.
 - `ol_client` is created in `pipeline.py` and is not used.
 - `load_files` only handles `.md` files.
 - Ollama host, embedding model names, vector size, chunk size, chunk overlap, RRF `k`, and the reranker model name are fixed in code.
+- `POST /ingestion/create_collection` returns `{"message": "Data ingestion successful"}` after creating a collection, when the collection does not exist, and creating a payload index.
 - `tests/test_chunking.py` hardcodes a local directory path, prints chunks, and calls `chunk_embedding`. The `create_collection` and `create_payload_index` calls in that file are comments. The file contains no assertions.
 - `tests/test_retrieval.py` hardcodes a query and defines `scrolldata` without calling it. The file contains no assertions.
 - `test_generation.py` contains no tests.
 - `filter_context_relative_response` returns `[]` when `result_rank` is `[]`. With the default `min_query=0.05`, a non-empty `result_rank` is filtered by `margin` and `max_chunks`.
+- The HTTP answer route returns the `ChatGroq.invoke` object inside `{"answer": response}`. `tests/test_retrieval.py` reads `.content` from that kind of object when the return value is not a `str`.
 
 ## 17. Future improvements
 
