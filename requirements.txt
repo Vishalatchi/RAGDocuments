@@ -11,3 +11,4 @@ langchain-text-splitter
 fastembed
 ollama
 sentence_transformers
+pytest

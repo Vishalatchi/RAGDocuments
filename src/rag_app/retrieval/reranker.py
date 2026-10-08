@@ -1,6 +1,7 @@
 from sentence_transformers import CrossEncoder
+from src.utils.logging import get_logger, log_timing
 
-
+logger = get_logger(__name__)
 def reranker(query, candidate, top_k=5):
     """
     candidates: list of quadrant scorepoint objects

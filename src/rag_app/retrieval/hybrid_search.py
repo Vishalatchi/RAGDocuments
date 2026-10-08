@@ -4,7 +4,9 @@ from dotenv import load_dotenv
 import ollama
 from fastembed import SparseTextEmbedding
 from src.rag_app.retrieval.reranker import reranker
+from src.utils.logging import get_logger, log_timing
 
+logger = get_logger(__name__)
 load_dotenv()
 
 def hybrid_search(query, limit=5, retrieval=20):
