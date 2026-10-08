@@ -3,7 +3,7 @@ from src.rag_app.ingestion import pipeline
 import os
 from dotenv import load_dotenv
 load_dotenv()
-path=(r"C:\Users\Vinoth\Python\AI programs\Power Automate\power-automate-docs\articles\mobile")
+path=(r"")
 
 data = fileloader.load_files(path)
 for d in data:
