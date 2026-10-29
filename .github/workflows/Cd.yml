@@ -1,0 +1,72 @@
+name: CD
+
+# Runs only after the CI workflow succeeds on main
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      # Placeholder: replace with a real deploy once you pick a host
+      - name: Deploy to staging
+        run: echo "Would deploy ghcr.io/${{ github.repository }}:${{ needs.build-and-push.outputs.image_tag }} to staging"
+
+      # Placeholder smoke test: later, curl your staging URL's /health endpoint
+      - name: Smoke test
+        run: echo "Would run smoke tests against staging"
+
+  deploy-prod:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production   # add required reviewers in repo Settings -> Environments
+    steps:
+      - name: Deploy to production
+        run: echo "Would deploy ghcr.io/${{ github.repository }}:${{ needs.build-and-push.outputs.image_tag }} to production"

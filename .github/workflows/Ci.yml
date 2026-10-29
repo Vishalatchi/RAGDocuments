@@ -1,0 +1,50 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+            python-version: "3.13"
+            cache: "pip"
+            cache-dependency-path: |
+                requirements.txt
+                requirements-dev.txt
+      #CPU only pytorch keeps the install small . tests mock the reranker model
+      - name: Install CPU only PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Test (pytest)
+        run: pytest --cov=src --cov=api --cov-report=term-missing --cov-fail-under=85
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+           fetch-depth: 0
+
+      - name: security scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v8
+        env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: actions/setup-python@v5
+        with:
+            python-version: "3.13"
+      - name: Dependency Vulnerability Scan (pip-audit)
+        run: |
+            pip install pip-audit
+            pip-audit -r requirement.txt
+
