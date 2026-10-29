@@ -20,6 +20,8 @@ This repository contains a FastAPI application titled `RAG system` and Python co
 
 **Logging**
 
+
+
 - `src/utils/logging.py` defines `request_id_var`, `RequestIdFilter`, `JsonFormatter`, `setup_logging`, `get_logger`, and `log_timing`.
 - `get_logger` calls `setup_logging` once, then returns `logging.getLogger(name)`.
 - `setup_logging` writes to stdout and, when `LOG_DIR` is non-empty, to a rotating file named `app.log`.
