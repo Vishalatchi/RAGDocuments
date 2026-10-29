@@ -26,6 +26,8 @@ This repository contains a FastAPI application titled `RAG system` and Python co
 
 **Document loading and chunking**
 
+
+
 - `src/rag_app/ingestion/fileloader.py` defines `load_files(filepath)`.
 - If `filepath` is a file and the path ends with `.md`, it chunks that file.
 - If `filepath` is not a file, it walks the path and chunks files whose names end with `.md`.
