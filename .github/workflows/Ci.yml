@@ -21,14 +21,14 @@ jobs:
           cache: "pip"
           cache-dependency-path: |
             requirements.txt
-            requirements-dev.txt
+            requirement-dev.txt
 
       # CPU-only PyTorch keeps the install small; tests mock the reranker model
       - name: Install CPU-only PyTorch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        run: pip install -r requirements.txt -r requirement-dev.txt
 
       - name: Lint (ruff)
         run: ruff check .
