@@ -62,11 +62,10 @@ jobs:
       # Placeholder smoke test: later, curl your staging URL's /health endpoint
       - name: Smoke test
         run: echo "Would run smoke tests against staging"
-
   deploy-prod:
-    needs: deploy-staging
+    needs: [build-and-push, deploy-staging]
     runs-on: ubuntu-latest
-    environment: production   # add required reviewers in repo Settings -> Environments
+    environment: production
     steps:
       - name: Deploy to production
         run: echo "Would deploy ghcr.io/${{ github.repository }}:${{ needs.build-and-push.outputs.image_tag }} to production"
