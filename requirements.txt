@@ -7,7 +7,7 @@ pydantic
 qdrant-client
 langchain-groq
 langchain-ollama
-langchain-text-splitter
+langchain-text-splitters
 fastembed
 ollama
 sentence_transformers
